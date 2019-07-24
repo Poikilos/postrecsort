@@ -1,12 +1,12 @@
 # postrecsort
 
-Sort files recovered by photorec, as comprehensively as possible.
+Sort files recovered by photorec using file analysis.
 
 ## Primary Features
 - Move images that are mostly transparent (to dest/Backup/blank).
 - Remove duplicate images by exact visual match.
 - Sort by extension into Documents, Pictures, Videos, and other
-  directories ($HOME/Backup/unknown if unknown type).
+  directories ($HOME/Backup/unknown if unknown type, leave unmoved in source if ignored system file).
 - Sort and rename music files to "Artist/Album/track title".
 - Place videos and pictures that are too small in a "thumbnails"
   directory.
