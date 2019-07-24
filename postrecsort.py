@@ -32,6 +32,12 @@ def decodeAny(unicode_or_str):
         if isinstance(unicode_or_str, str):
             text = unicode_or_str
             decoded = False
+        elif isinstance(unicode_or_str, int):
+            text = str(unicode_or_str)
+            decoded = False
+        elif isinstance(unicode_or_str, float):
+            text = str(unicode_or_str)
+            decoded = False
         else:
             text = unicode_or_str.decode('ascii')
             decoded = True
@@ -96,7 +102,7 @@ validMinFileSizes = {}
 validMinFileSizes["Videos"] = 40 * 1024  # 4096
 validMinFileSizes["Music"] = 1024000
 validMinFileTypeSizes = {}
-validMinFileTypeSizes["flac"] = 3072000
+# validMinFileTypeSizes["flac"] = 3072000
 unknownTypes = []
 unknownPathExamples = []
 foundTypeCounts = {}
@@ -184,7 +190,7 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
         if os.path.isfile(subPath):
             ext = os.path.splitext(subPath)[1]
             if len(ext) > 1:
-                ext = ext[1:]
+                ext = ext[1:]  # remove dot
             lowerExt = ext.lower()
             enableIgnore = False
             newName = subName
@@ -313,9 +319,9 @@ def getTitleQuality(title):
     ret = -1
     if title is not None:
         ret = 0
-        if startsWithThe(s):
+        if startsWithThe(title):
             ret += 4
-        for c in s:
+        for c in title:
             if c == c.upper():
                 ret += 1
     return ret
@@ -340,24 +346,131 @@ def getSimilar(needle, haystack):
                 if (retQuality is None) or (quality > retQuality):
                     retQuality = quality
                     ret = s
-
     return ret
 
 
-def getAndCollectSimilarArtist(artist):
+def getAndCollectSimilarArtist(name):
     ret = getSimilar(name, artists)
-    if name not in artists:
-        artists.append(name)
+    if name is not None:
+        if name not in artists:
+            artists.append(name)
     if ret is None:
         ret = name
 
 def getAndCollectSimilarAlbum(name):
     ret = getSimilar(name, albums)
-    if name not in albums:
-        albums.append(name)
+    if name is not None:
+        if name not in albums:
+            albums.append(name)
     if ret is None:
         ret = name
     return ret
+
+# Usage:
+# tag = TinyTag.get(subPath)
+# filenName = fileNameFromStats(tag.__dict__)
+def getMeta(path):
+    ret = {}
+    album = None
+    artist = None
+    title = None
+    track = None
+    newName = None
+
+    if not os.path.isfile(path):
+        raise RuntimeError("not a file: " + str(path))
+    try:
+        newName = os.path.basename(path)
+        ext = os.path.splitext(path)[1]
+        if len(ext) > 1:
+            ext = ext[1:]  # remove dot
+        lowerExt = ext.lower()
+        tag = TinyTag.get(path)
+        artist = tag.__dict__.get('albumartist')
+        album = tag.__dict__.get('album')
+        title = tag.__dict__.get('title')
+        track = tag.__dict__.get('track')
+        disc = tag.__dict__.get('disc')
+        if artist is None:
+            songArtist = tag.__dict__.get('artist')
+            if songArtist is not None:
+                artist = decodeAny(songArtist)
+            else:
+                artist = "unknown"
+            # category = None
+        else:
+            artist = decodeAny(artist)
+            # artist = unicode(artist, "utf-8")
+        album = decodeAny(album)
+        title = decodeAny(title)
+        track = decodeAny(track)
+        disc = decodeAny(disc)
+
+        artist = replaceMany(artist, replacementPathChars)
+        album = replaceMany(album, replacementPathChars)
+        title = replaceMany(title, replacementPathChars)
+
+        artist = replaceAnyChar(artist, badPathChars, newStr="_")
+        album = replaceAnyChar(album, badPathChars, newStr="_")
+        title = replaceAnyChar(title, badPathChars, newStr="_")
+
+        if artist is not None:
+            artist = artist.strip()
+        if album is not None:
+            album = album.strip()
+        if title is not None:
+            title = title.strip()
+        if track is not None:
+            track = track.strip()
+            if len(track) == 1:
+                track = "0" + track
+
+        album = getAndCollectSimilarAlbum(album)
+        artist = getAndCollectSimilarArtist(artist)
+
+        if (artist is None) or (len(artist) == 0):
+            artist = "unknown"
+        if (album is None) or (len(album) == 0):
+            album = "unknown"
+            # category = None
+        else:
+            album = decodeAny(album)
+        if len(album) == 0:
+            album = "unknown"
+        if title is not None:
+            if track is not None:
+                if title[:3] == track + ".":
+                    title = title[3:].strip()
+                if title[:2] == track:
+                    title = title[2:].strip()
+                newName = withExt(track + " " + title, ext)
+                if disc is not None:
+                    newName = disc + "." + newName
+                    # print(newName)
+            else:
+                newName = withExt(title, ext)
+        elif track is not None:
+            newName = track + " " + subName
+    except TinyTagException:
+        # no tag info
+        pass
+    except struct.error:
+        # such as "unpack requires a buffer of 34 bytes"
+        # during TinyTag.get(path)
+        # print("#  " * depth + "No tags: " + lowerExt)
+        pass
+    if artist is not None:
+        ret['Artist'] = artist
+    if album is not None:
+        ret['Album'] = album
+    if track is not None:
+        ret['Track'] = track
+    if title is not None:
+        ret['Title'] = title
+    if newName is not None:
+        ret['SuggestedFileName'] = newName
+    return ret
+
 
 def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
     # preRecoveredPath becomes a subdirectory upon recursion
@@ -365,7 +478,7 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
     if os.path.isdir(preRecoveredPath):
         folderPath = preRecoveredPath
         for subName in os.listdir(folderPath):
-            dstFilePath = None
+            newPath = None
             subPath = os.path.join(folderPath, subName)
             subRelPath = subName
             catMajorPath = None
@@ -379,7 +492,7 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                 newName = subName
                 ext = os.path.splitext(subPath)[1]
                 if len(ext) > 1:
-                    ext = ext[1:]
+                    ext = ext[1:]  # remove dot
                 lowerExt = ext.lower()
                 if len(lowerExt) == 0:
                     if enableNoExtIgnore:
@@ -405,84 +518,22 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                 else:
                     catMajorPath = os.path.join(profilePath, catDirNames[category])
                 if category == "Music":
-                    try:
-                        tag = TinyTag.get(subPath)
-                        # print('This track is by %s.' % tag.artist)
-                        # print("  " * depth + subPath + ": " + str(tag))
-                        artist = tag.__dict__.get('albumartist')
-                        album = tag.__dict__.get('album')
-                        title = tag.__dict__.get('title')
-                        track = tag.__dict__.get('track')
-                        catPath = catMajorPath
-                        if artist is None:
-                            songArtist = tag.__dict__.get('artist')
-                            if songArtist is not None:
-                                artist = decodeAny(songArtist)
-                            else:
-                                artist = "unknown"
-                            # category = None
-                        else:
-                            artist = decodeAny(artist)
-                            # artist = unicode(artist, "utf-8")
-                        album = decodeAny(album)
-                        title = decodeAny(title)
-                        track = decodeAny(track)
-
-                        artist = replaceMany(artist, replacementPathChars)
-                        album = replaceMany(album, replacementPathChars)
-                        title = replaceMany(title, replacementPathChars)
-
-                        artist = replaceAnyChar(artist, badPathChars, newStr="_")
-                        album = replaceAnyChar(album, badPathChars, newStr="_")
-                        title = replaceAnyChar(title, badPathChars, newStr="_")
-
-                        artist = artist.strip()
-                        album = album.strip()
-                        title = title.strip()
-                        track = track.strip()
-
-                        album = getAndCollectSimilarAlbum(album)
-                        artist = getAndCollectSimilarArtist(artist)
-
-                        if len(artist) == 0:
-                            artist = "unknown"
-                        if album is None:
-                            album = "unknown"
-                            # category = None
-                        else:
-                            album = decodeAny(album)
-                        if len(album) == 0:
-                            artist = "album"
-                        if title is not None:
-                            catPath = os.path.join(
-                                os.path.join(catMajorPath, artist),
-                                album
-                            )
-                        else:
-                            catPath = os.path.join(catMajorPath, "misc")
-                        if track is not None:
-                            track = str(track)
-                        if title is not None:
-                            if track is not None:
-                                newName = withExt(track + " " + title, ext)
-                            else:
-                                newName = withExt(title, ext)
-                        elif track is not None:
-                            newName = track + " " + subName
-                    except KeyboardInterrupt:
-                        go = False
-                        break
-                    except TinyTagException:
-                        print("#  " * depth + "No tags: " + lowerExt)
+                    # print('This track is by %s.' % tag.artist)
+                    # print("  " * depth + subPath + ": " + str(tag))
+                    catPath = catMajorPath
+                    newStats = getMeta(subPath)
+                    newName = newStats.get("SuggestedFileName")
+                    artist = newStats.get("Artist")
+                    album = newStats.get("Album")
+                    if newName is None:
+                        newName = subName
+                    if (artist is not None) and (album is not None):
+                        catPath = os.path.join(
+                            os.path.join(catMajorPath, artist),
+                            album
+                        )
+                    else:
                         catPath = os.path.join(catMajorPath, "misc")
-                    except struct.error:
-                        # such as "unpack requires a buffer of 34 bytes"
-                        # during TinyTag.get(path)
-                        print("#  " * depth + "No tags: " + lowerExt)
-                        catPath = os.path.join(catMajorPath, "misc")
-                    for c in badPathChars:
-                        newName = newName.replace(c, "_")
-
                 elif category == "Pictures":
                     try:
                         im = Image.open(subPath)
@@ -507,31 +558,31 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                 # print("ensuring dir: " + catPath)
                 if not os.path.isdir(catPath):
                     os.makedirs(catPath)
-                dstFilePath = os.path.join(catPath, newName)
+                newPath = os.path.join(catPath, newName)
                 tryNum = 0
                 newNamePartial = os.path.splitext(newName)[0]
-                print("# moving to '" + dstFilePath + "'")
-                while os.path.isfile(dstFilePath):
+                print("# moving to '" + newPath + "'")
+                while os.path.isfile(newPath):
                     tryNum += 1
-                    dstFilePath = os.path.join(catPath, newNamePartial + " [" + str(tryNum) + "]")
-                    dstFilePath = withExt(dstFilePath, ext)
-                shutil.move(subPath, dstFilePath)
-                print("mv '" + dstFilePath+ "' '" + dstFilePath + "'")
+                    newPath = os.path.join(catPath, newNamePartial + " [" + str(tryNum) + "]")
+                    newPath = withExt(newPath, ext)
+                shutil.move(subPath, newPath)
+                print("mv '" + newPath+ "' '" + newPath + "'")
 
                 if enableShowLarge:
                     if fileSize > largeSize:
-                        print('{0:.3g}'.format(fileSize/1024/1024) + "MB: " + dstFilePath)
+                        print('{0:.3g}'.format(fileSize/1024/1024) + "MB: " + newPath)
                         # g removes insignificant zeros
                 if (category not in foundMaximums) or (fileSize > foundMaximums[category]):
                     foundMaximums[category] = fileSize
-                    foundMaximumPaths[category] = dstFilePath
+                    foundMaximumPaths[category] = newPath
                 if lowerExt not in foundTypeCounts.keys():
                     foundTypeCounts[lowerExt] = 1
                 else:
                     foundTypeCounts[lowerExt] += 1
                 if category is None:
                     print("  " * depth + "unknown type: " + lowerExt + " for '" + subPath + "'")
-                # print("  " * depth + "[" + str(category) + "]" + dstFilePath)
+                # print("  " * depth + "[" + str(category) + "]" + newPath)
             elif os.path.isdir(subPath):
                 # print(" " * depth + subName)
                 # if subName[:1] != ".":
