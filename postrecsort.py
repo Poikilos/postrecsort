@@ -4,6 +4,7 @@ import sys
 import os
 import shutil
 import struct
+import filecmp
 # import md5
 
 try:
@@ -52,6 +53,7 @@ if len(sys.argv) < 3:
 
 enableShowLarge = False
 largeSize = 1024000
+maxComparisonSize = 2 * 1024 * 1024
 
 catDirNames = {}
 
@@ -93,7 +95,7 @@ categories["Playlists"] = ["asx", "bpl", "feed", "itpc", "m3u", "m3u8", "opml", 
 categories["Shortcuts"] = ["lnk"]
 categories["Videos"] = ["asf", "avi", "mp2", "mp4", "mpe", "mpeg", "mpg", "mov", "swf", "wmv", "webm", "wm"]
 validMinFileSizes = {}
-validMinFileSizes["Videos"] = 4096
+validMinFileSizes["Videos"] = 40 * 1024  # 4096
 validMinFileSizes["Music"] = 1024000
 validMinFileTypeSizes = {}
 validMinFileTypeSizes["flac"] = 3072000
@@ -132,12 +134,22 @@ catDirNames["Playlists"] = "Music"
 catDirNames["Shortcuts"] = "Shortcuts"
 catDirNames["Torrents"] = os.path.join(catDirNames["Downloads"], "torrents")
 catDirNames["Videos"] = "Videos"
-badPathChars = ["></\\:;\t|\n\r\""]   # invalid characters on Windows
-                                      # also include 1-31 and \b
+badPathChars = ["></\\:;\t|\n\r\"?"]   # NOTE: Invalid characters on
+                                       # Windows also include 1-31 & \b
+replacementPathChars = [("\"", "in"), (":","-"), ("?",""),("\r",""), ("\n",""), ("/",","), ("\\",","), (":","-")]
+# Do not recurse into doneNames
+doneNames = ["blank", "duplicates", "thumbnails", "unusable"]
 
 go = True
 
 uniqueCheckExt = []
+
+def replaceMany(s, tuples):
+    ret = s
+    if ret is not None:
+        for t in tuples:
+            ret = ret.replace(t[0], t[1])
+    return ret
 
 def sortedBySize(parent, subs):
     pairs = []
@@ -151,17 +163,16 @@ def sortedBySize(parent, subs):
         ret.append(sub)
     return ret
 
-def removeBlank(preRecoveredPath, profilePath, relPath="", depth=0):
+def removeExtra(folderPath, profilePath, relPath="", depth=0):
     backupPath = os.path.join(profilePath, "Backup")
-    folderPath = preRecoveredPath
     print("# checking for blanks in: " + folderPath)
-    imPrev = None
+    prevIm = None
+    prevSize = None
+    prevDestPath = None
 
     for subName in sortedBySize(folderPath, os.listdir(folderPath)):
         subPath = os.path.join(folderPath, subName)
         subRelPath = subName
-        # catMajorPath = None
-        # catPath = None
         if len(subName) > 0:
             subRelPath = os.path.join(relPath, subName)
         if os.path.isfile(subPath):
@@ -170,10 +181,19 @@ def removeBlank(preRecoveredPath, profilePath, relPath="", depth=0):
                 ext = ext[1:]
             lowerExt = ext.lower()
             enableIgnore = False
+            newName = subName
+            newParentPath = folderPath
+            newPath = subPath
             isBlank = False
             isDup = False
             fileSize = os.path.getsize(subPath)
-            if lowerExt in categories["Pictures"]:
+            category = None
+            for k, v in categories.items():
+                # print("checking if " + str(v) + "in" + str(catDirNames))
+                if lowerExt in v:
+                    category = k
+
+            if category == "Pictures":
                 # print("# checking if blank: " + subPath)
                 try:
                     im = Image.open(subPath)
@@ -200,20 +220,20 @@ def removeBlank(preRecoveredPath, profilePath, relPath="", depth=0):
                         isBlank = True
                     if not isBlank:
                         #try:
-                        if imPrev is not None:
-                            prevW, prevH = imPrev.size
-                            if imPrev.size == im.size:
+                        if prevIm is not None:
+                            prevW, prevH = prevIm.size
+                            if prevIm.size == im.size:
                                 isDup = True
                                 # print("# comparing pixels in '" + subPath + "'...")
                                 for y in range(height):
                                     for x in range(width):
-                                        if rgbIm.getpixel((x, y)) != imPrev.getpixel((x, y)):
+                                        if rgbIm.getpixel((x, y)) != prevIm.getpixel((x, y)):
                                             isDup = False
                                             break
-                            imPrev.close()
+                            prevIm.close()
                         # except:
                             # isDup = False
-                    imPrev = rgbIm
+                    prevIm = rgbIm
                 except OSError:
                     # isBlank = True
                     # such as "Unsupported BMP header type (0)"
@@ -224,48 +244,118 @@ def removeBlank(preRecoveredPath, profilePath, relPath="", depth=0):
                         im.close()
                 except:
                     pass
-            elif lowerExt in categories["Music"]:
-                validMinFileSize = validMinFileSizes.get("Music")
+            else:
+                validMinFileSize = validMinFileSizes.get(category)
                 if validMinFileSize is not None:
                     if fileSize < validMinFileSize:
                         isBlank = True
-                validMinFileTypeSize = validMinFileTypeSizes.get(lowerExt)
-                if validMinFileTypeSize is not None:
-                    if fileSize < validMinFileTypeSize:
-                        isBlank = True
+                if (prevSize is not None) and (fileSize == prevSize) \
+                        and (fileSize <= maxComparisonSize) \
+                        and (prevDestPath is not None):
+                    print("# comparing bytes to " + '{0:.2g}'.format(fileSize/1024/1024) + " MB '" + prevDestPath + "'...")
+                    if (filecmp.cmp(prevDestPath, subPath)):
+                        isDup = True
             # else:
                 # if lowerExt not in uniqueCheckExt:
                     # print("# not checking if blank: " + subPath)
                     # uniqueCheckExt.append(lowerExt)
-            newName = subName
+            newName = replaceMany(newName, replacementPathChars)
             for c in badPathChars:
                 newName = newName.replace(c, "_")
+
+            if isDup:
+                os.remove(subPath)  # do not set previous if removing
+                continue
+
             if isBlank:
                 newParentPath = os.path.join(backupPath, "blank")
-                newPath = os.path.join(newParentPath, newName)
+
+            newPath = os.path.join(newParentPath, newName)
+
+            if (newPath != subPath):
                 if not os.path.isdir(newParentPath):
                     os.makedirs(newParentPath)
                 shutil.move(subPath, newPath)
-            elif isDup:
-                newParentPath = os.path.join(backupPath, "duplicates")
-                newPath = os.path.join(newParentPath, newName)
-                # if not os.path.isdir(newParentPath):
-                    # os.makedirs(newParentPath)
-                # shutil.move(subPath, newPath)
-                os.remove(subPath)
-            elif newName != subName:
-                newParentPath = folderPath
-                newPath = os.path.join(newParentPath, newName)
-                # if not os.path.isdir(newParentPath):
-                    # os.makedirs(newParentPath)
-                shutil.move(subPath, newPath)
+            prevSize = fileSize
+            prevDestPath = newPath
         else:
-            doneNames = ["blank", "duplicates", "thumbnails", "unusable"]
             if subName not in doneNames:
-                removeBlank(subPath, profilePath, relPath=subRelPath, depth=depth+1)
+                removeExtra(subPath, profilePath, relPath=subRelPath, depth=depth+1)
 
+artists = []
+albums = []
+
+def startsWithThe(s):
+    if s is None:
+        return False
+    return (len(s) >= 4) and (s.lower()[0:4] == "the ")
+
+def getWithThe(s):
+    ret = s
+    if ret is not None:
+        if not startsWithThe(s):
+            ret = "The " + s
+    return ret
+
+def getWithoutThe(s):
+    ret = s
+    if ret is not None:
+        if startsWithThe(s):
+            ret = s[4:]
+    return ret
+
+def getTitleQuality(title):
+    ret = -1
+    if title is not None:
+        ret = 0
+        if startsWithThe(s):
+            ret += 4
+        for c in s:
+            if c == c.upper():
+                ret += 1
+    return ret
+
+
+def getSimilar(needle, haystack):
+    ret = None
+    if needle is not None:
+        needleQuality = getTitleQuality(needle)
+        needleL = needle.lower()
+        theNeedle = getWithThe(needle)
+        theNeedleL = theNeedle.lower()
+        retQuality = None
+        for s in haystack:
+            quality = getTitleQuality(s)
+            theS = getWithThe(s)
+            theSL = theS.lower()
+            sL = s.lower()
+            # if (theSL == needleL) or (theSL == theNeedleL) \
+                    # or (sL == needleL) or (sL == theNeedleL):
+            if (sL == needleL) or (sL == theNeedleL):
+                if (retQuality is None) or (quality > retQuality):
+                    retQuality = quality
+                    ret = s
+
+    return ret
+
+
+def getAndCollectSimilarArtist(artist):
+    ret = getSimilar(name, artists)
+    if name not in artists:
+        artists.append(name)
+    if ret is None:
+        ret = name
+
+def getAndCollectSimilarAlbum(name):
+    ret = getSimilar(name, albums)
+    if name not in albums:
+        albums.append(name)
+    if ret is None:
+        ret = name
+    return ret
 
 def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
+    # preRecoveredPath becomes a subdirectory upon recursion
     global catDirNames
     if os.path.isdir(preRecoveredPath):
         folderPath = preRecoveredPath
@@ -293,8 +383,8 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                     enableIgnore = True
                 if enableIgnore:
                     continue
-                category = None
                 fileSize = os.path.getsize(subPath)
+                category = None
                 for k, v in categories.items():
                     # print("checking if " + str(v) + "in" + str(catDirNames))
                     if lowerExt in v:
@@ -332,6 +422,19 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                         album = decodeAny(album)
                         title = decodeAny(album)
                         track = decodeAny(album)
+
+                        artist = replaceMany(artist)
+                        album = replaceMany(album)
+                        title = replaceMany(title)
+
+                        artist = artist.strip()
+                        album = album.strip()
+                        title = title.strip()
+                        track = track.strip()
+
+                        album = getAndCollectSimilarAlbum(album)
+                        artist = getAndCollectSimilarArtist(artist)
+
                         if len(artist) == 0:
                             artist = "unknown"
                         if album is None:
@@ -361,13 +464,15 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                         go = False
                         break
                     except TinyTagException:
-                        print("  " * depth + "No tags: " + lowerExt)
+                        print("#  " * depth + "No tags: " + lowerExt)
                         catPath = os.path.join(catMajorPath, "misc")
                     except struct.error:
                         # such as "unpack requires a buffer of 34 bytes"
                         # during TinyTag.get(path)
-                        print("  " * depth + "No tags: " + lowerExt)
+                        print("#  " * depth + "No tags: " + lowerExt)
                         catPath = os.path.join(catMajorPath, "misc")
+                    for c in badPathChars:
+                        newName = newName.replace(c, "_")
 
                 elif category == "Pictures":
                     try:
@@ -429,7 +534,7 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
 # print(sys.argv[1])
 sortFiles(sys.argv[1], sys.argv[2])
 
-removeBlank(sys.argv[2], sys.argv[2])  # same arg for both
+removeExtra(sys.argv[2], sys.argv[2])  # same arg for both
 
 print("Maximums:")
 for k, v in foundMaximums.items():
