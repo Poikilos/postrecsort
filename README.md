@@ -13,7 +13,11 @@ Sort files recovered by photorec using file analysis.
 - Tries hard to separate non-user files:
     - If title is missing from a song, it may not be a song at all,
       so it goes in "Music/misc".
-    - If file is too small to be a valid (check if song < 1MB, check if image resolution is thumbnail size), assume it is not, and put it in dest/Backup/blank
+    - If file is too small to be valid (check if song < 1MB, check if
+      image resolution is thumbnail size, check file size otherwise),
+      assume it is not, and put it in "dest/Backup/blank".
+      - You would usually delete the "blank" folder manually--it only
+        exists for you to confirm.
 
 ## Install
 - Install the PIL and TinyTag packages for your system.
