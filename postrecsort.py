@@ -48,8 +48,6 @@ def customDie(msg):
         print("")
     exit(1)
 
-if len(sys.argv) < 3:
-    customDie("There must be two parameters.")
 
 enableShowLarge = False
 largeSize = 1024000
@@ -137,12 +135,20 @@ catDirNames["Videos"] = "Videos"
 badPathChars = ["></\\:;\t|\n\r\"?"]   # NOTE: Invalid characters on
                                        # Windows also include 1-31 & \b
 replacementPathChars = [("\"", "in"), (":","-"), ("?",""),("\r",""), ("\n",""), ("/",","), ("\\",","), (":","-")]
+
 # Do not recurse into doneNames
 doneNames = ["blank", "duplicates", "thumbnails", "unusable"]
 
 go = True
 
 uniqueCheckExt = []
+
+def replaceAnyChar(s, characters, newStr="_"):
+    ret = s
+    if ret is not None:
+        for c in characters:
+            ret = ret.replace(c, newStr)
+    return ret
 
 def replaceMany(s, tuples):
     ret = s
@@ -260,8 +266,7 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
                     # print("# not checking if blank: " + subPath)
                     # uniqueCheckExt.append(lowerExt)
             newName = replaceMany(newName, replacementPathChars)
-            for c in badPathChars:
-                newName = newName.replace(c, "_")
+            newName = replaceAnyChar(newName, badPathChars, newStr="_")
 
             if isDup:
                 os.remove(subPath)  # do not set previous if removing
@@ -410,9 +415,9 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                         track = tag.__dict__.get('track')
                         catPath = catMajorPath
                         if artist is None:
-                            songartist = tag.__dict__.get('artist')
-                            if songartist is not None:
-                                artist = decodeAny(songartist)
+                            songArtist = tag.__dict__.get('artist')
+                            if songArtist is not None:
+                                artist = decodeAny(songArtist)
                             else:
                                 artist = "unknown"
                             # category = None
@@ -420,12 +425,16 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                             artist = decodeAny(artist)
                             # artist = unicode(artist, "utf-8")
                         album = decodeAny(album)
-                        title = decodeAny(album)
-                        track = decodeAny(album)
+                        title = decodeAny(title)
+                        track = decodeAny(track)
 
-                        artist = replaceMany(artist)
-                        album = replaceMany(album)
-                        title = replaceMany(title)
+                        artist = replaceMany(artist, replacementPathChars)
+                        album = replaceMany(album, replacementPathChars)
+                        title = replaceMany(title, replacementPathChars)
+
+                        artist = replaceAnyChar(artist, badPathChars, newStr="_")
+                        album = replaceAnyChar(album, badPathChars, newStr="_")
+                        title = replaceAnyChar(title, badPathChars, newStr="_")
 
                         artist = artist.strip()
                         album = album.strip()
@@ -530,20 +539,22 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
     else:
         customDie(preRecoveredPath + " is not a directory")
 
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        customDie("There must be two parameters.")
+    # print(sys.argv[1])
+    sortFiles(sys.argv[1], sys.argv[2])
 
-# print(sys.argv[1])
-sortFiles(sys.argv[1], sys.argv[2])
+    removeExtra(sys.argv[2], sys.argv[2])  # same arg for both
 
-removeExtra(sys.argv[2], sys.argv[2])  # same arg for both
-
-print("Maximums:")
-for k, v in foundMaximums.items():
-    print("  Largest in " + k + ":" + '{0:.3g}'.format(v/1024/1024) + " MB): " + foundMaximumPaths[k])
-print("unknownTypes: " + str(unknownTypes))
-print("unknownPathExamples:")
-for s in unknownPathExamples:
-    print("  - " + s)
-if not go:
-    print("Cancelled.")
-else:
-    print("Done.")
+    print("Maximums:")
+    for k, v in foundMaximums.items():
+        print("  Largest in " + k + ":" + '{0:.3g}'.format(v/1024/1024) + " MB): " + foundMaximumPaths[k])
+    print("unknownTypes: " + str(unknownTypes))
+    print("unknownPathExamples:")
+    for s in unknownPathExamples:
+        print("  - " + s)
+    if not go:
+        print("Cancelled.")
+    else:
+        print("Done.")
