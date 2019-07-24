@@ -3,7 +3,7 @@
 Sort files recovered by photorec, as comprehensively as possible.
 
 ## Primary Features
-- Remove images that are transparent.
+- Move images that are mostly transparent (to dest/Backup/blank).
 - Remove duplicate images by exact visual match.
 - Sort by extension into Documents, Pictures, Videos, and other
   directories ($HOME/Backup/unknown if unknown type).
@@ -13,6 +13,7 @@ Sort files recovered by photorec, as comprehensively as possible.
 - Tries hard to separate non-user files:
     - If title is missing from a song, it may not be a song at all,
       so it goes in "Music/misc".
+    - If file is too small to be a valid (check if song < 1MB, check if image resolution is thumbnail size), assume it is not, and put it in dest/Backup/blank
 
 ## Install
 - Install the PIL and TinyTag packages for your system.
