@@ -3,6 +3,8 @@
 Sort files recovered by photorec, as comprehensively as possible.
 
 ## Primary Features
+- Remove images that are transparent.
+- Remove duplicate images by exact visual match.
 - Sort by extension into Documents, Pictures, Videos, and other
   directories ($HOME/Backup/unknown if unknown type).
 - Sort and rename music files to "Artist/Album/track title".

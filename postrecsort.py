@@ -4,7 +4,7 @@ import sys
 import os
 import shutil
 import struct
-import md5
+# import md5
 
 try:
     from PIL import Image
@@ -57,7 +57,7 @@ catDirNames = {}
 
 # region make configurable
 enableNoExtIgnore = True  # if NO extension, ignore
-ignoreMoreExts = ["zip", "gz", "html", "htm", "mmw"]
+ignoreMoreExts = ["zip", "gz", "html", "htm", "mmw", "php"]
 knownThumbnailSizes = [(160,120), (160,120), (200,200), (264,318), (218,145), (100,100), (158,158), (53,53)]
 # 170x330 is hp setup image
 minNonThumnailPixels = 150 * 199 + 1
@@ -65,6 +65,7 @@ minNonThumnailPixels = 150 * 199 + 1
     # pixCount = knownThumbnailSize[0] * knownThumbnailSize[1]
     # if pixCount + 1 > minNonThumnailPixels:
         # minNonThumnailPixels = pixCount + 1
+clearRatioMax = 0.9
 # endregion make configurable
 
 
@@ -79,11 +80,12 @@ for thisExt in ignoreMoreExts:
 ignore = ["user"]
 categories = {}
 categories["Backup"] = ["7z", "accdb", "dbx", "idx", "mbox", "mdb", "pst", "sqlite", "tar", "wab", "zip"]
-categories["Documents"] = ["ai", "csv", "doc", "docx", "mpp", "pdf", "ppt", "pptx", "ps", "rtf", "txt", "wpd", "wps", "xls", "xlsx", "xlr"]
+categories["Documents"] = ["ai", "csv", "doc", "docx", "mpp", "pdf", "ppt", "pptx", "ps", "rtf", "wpd", "wps", "xls", "xlsx", "xlr"]
+categories["PlainText"] = ["txt"]
 categories["Downloads"] = ["bin", "cue", "iso"]
 categories["Torrents"] = ["torrent"]
 categories["eBooks"] = ["prc", "lit"]
-categories["Links"] = ["url"]
+categories["Links"] = ["url", "website"]
 categories["Meshes"] = ["x3d"]
 categories["Music"] = ["ape", "flac", "m4a", "mid", "mp3", "ogg", "wav", "wma"]
 categories["Pictures"] = ["bmp", "gif", "ico", "jpe", "jpeg", "jpg", "png", "psd", "svg", "wmf"]
@@ -92,6 +94,9 @@ categories["Shortcuts"] = ["lnk"]
 categories["Videos"] = ["asf", "avi", "mp2", "mp4", "mpe", "mpeg", "mpg", "mov", "swf", "wmv", "webm", "wm"]
 validMinFileSizes = {}
 validMinFileSizes["Videos"] = 4096
+validMinFileSizes["Music"] = 1024000
+validMinFileTypeSizes = {}
+validMinFileTypeSizes["flac"] = 3072000
 unknownTypes = []
 unknownPathExamples = []
 foundTypeCounts = {}
@@ -118,23 +123,41 @@ catDirNames["Backup"] = "Backup"
 catDirNames["Documents"] = "Documents"
 catDirNames["eBooks"] = os.path.join(catDirNames["Documents"], "eBooks")
 catDirNames["Downloads"] = "Downloads"
-catDirNames["Links"] = "Links"
+catDirNames["Links"] = "Favorites"
 catDirNames["Meshes"] = "Meshes"
 catDirNames["Music"] = "Music"
 catDirNames["Pictures"] = "Pictures"
+catDirNames["PlainText"] = os.path.join(catDirNames["Documents"], "plaintext")
 catDirNames["Playlists"] = "Music"
 catDirNames["Shortcuts"] = "Shortcuts"
 catDirNames["Torrents"] = os.path.join(catDirNames["Downloads"], "torrents")
 catDirNames["Videos"] = "Videos"
+badPathChars = ["></\\:;\t|\n\r\""]   # invalid characters on Windows
+                                      # also include 1-31 and \b
 
 go = True
 
 uniqueCheckExt = []
 
-def removeBlank(profilePath, relPath="", depth=0):
-    folderPath = profilePath
+def sortedBySize(parent, subs):
+    pairs = []
+    for sub in subs:
+        path = os.path.join(parent, sub)
+        size = os.path.getsize(path)
+        pairs.append((size, sub))
+    pairs.sort(key=lambda s: s[0])
+    ret = []
+    for size, sub in pairs:
+        ret.append(sub)
+    return ret
+
+def removeBlank(preRecoveredPath, profilePath, relPath="", depth=0):
+    backupPath = os.path.join(profilePath, "Backup")
+    folderPath = preRecoveredPath
     print("# checking for blanks in: " + folderPath)
-    for subName in os.listdir(folderPath):
+    imPrev = None
+
+    for subName in sortedBySize(folderPath, os.listdir(folderPath)):
         subPath = os.path.join(folderPath, subName)
         subRelPath = subName
         # catMajorPath = None
@@ -147,41 +170,99 @@ def removeBlank(profilePath, relPath="", depth=0):
                 ext = ext[1:]
             lowerExt = ext.lower()
             enableIgnore = False
+            isBlank = False
+            isDup = False
+            fileSize = os.path.getsize(subPath)
             if lowerExt in categories["Pictures"]:
                 # print("# checking if blank: " + subPath)
                 try:
                     im = Image.open(subPath)
                     width, height = im.size
+                    pixCount = width * height
                     rgbIm = im.convert('RGBA')
                     # convert, otherwise GIF will yield single value
                     lastColor = None
                     isBlank = True
+                    clearCount = 0
+                    print("# checking pixels in " + '{0:.2g}'.format(fileSize/1024/1024) + " MB '" + subPath + "'...")
                     for y in range(height):
                         for x in range(width):
                             thisColor = rgbIm.getpixel((x, y))
                             if thisColor[3] == 0:
                                 thisColor = (0, 0, 0, 0)
+                            if thisColor[3] < 128:
+                                clearCount += 1
                             if (lastColor is not None) and (lastColor != thisColor):
                                 isBlank = False
                                 break
                             lastColor = thisColor
-                    im.close()
+                    if (float(clearCount) / float(pixCount)) > clearRatioMax:
+                        isBlank = True
+                    if not isBlank:
+                        #try:
+                        if imPrev is not None:
+                            prevW, prevH = imPrev.size
+                            if imPrev.size == im.size:
+                                isDup = True
+                                # print("# comparing pixels in '" + subPath + "'...")
+                                for y in range(height):
+                                    for x in range(width):
+                                        if rgbIm.getpixel((x, y)) != imPrev.getpixel((x, y)):
+                                            isDup = False
+                                            break
+                            imPrev.close()
+                        # except:
+                            # isDup = False
+                    imPrev = rgbIm
                 except OSError:
-                    isBlank = True
+                    # isBlank = True
                     # such as "Unsupported BMP header type (0)"
+                    # but it could be an SVG, PSD, or other good file!
                     pass
-                if isBlank:
-                    newParentPath = os.path.join(folderPath, "blank")
-                    newPath = os.path.join(newParentPath, subName)
-                    if not os.path.isdir(newParentPath):
-                        os.makedirs(newParentPath)
-                    shutil.move(subPath, newPath)
+                try:
+                    if im is not None:
+                        im.close()
+                except:
+                    pass
+            elif lowerExt in categories["Music"]:
+                validMinFileSize = validMinFileSizes.get("Music")
+                if validMinFileSize is not None:
+                    if fileSize < validMinFileSize:
+                        isBlank = True
+                validMinFileTypeSize = validMinFileTypeSizes.get(lowerExt)
+                if validMinFileTypeSize is not None:
+                    if fileSize < validMinFileTypeSize:
+                        isBlank = True
             # else:
                 # if lowerExt not in uniqueCheckExt:
                     # print("# not checking if blank: " + subPath)
                     # uniqueCheckExt.append(lowerExt)
+            newName = subName
+            for c in badPathChars:
+                newName = newName.replace(c, "_")
+            if isBlank:
+                newParentPath = os.path.join(backupPath, "blank")
+                newPath = os.path.join(newParentPath, newName)
+                if not os.path.isdir(newParentPath):
+                    os.makedirs(newParentPath)
+                shutil.move(subPath, newPath)
+            elif isDup:
+                newParentPath = os.path.join(backupPath, "duplicates")
+                newPath = os.path.join(newParentPath, newName)
+                # if not os.path.isdir(newParentPath):
+                    # os.makedirs(newParentPath)
+                # shutil.move(subPath, newPath)
+                os.remove(subPath)
+            elif newName != subName:
+                newParentPath = folderPath
+                newPath = os.path.join(newParentPath, newName)
+                # if not os.path.isdir(newParentPath):
+                    # os.makedirs(newParentPath)
+                shutil.move(subPath, newPath)
         else:
-            removeBlank(subPath, relPath=subRelPath, depth=depth+1)
+            doneNames = ["blank", "duplicates", "thumbnails", "unusable"]
+            if subName not in doneNames:
+                removeBlank(subPath, profilePath, relPath=subRelPath, depth=depth+1)
 
 
 def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
@@ -348,7 +429,7 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
 # print(sys.argv[1])
 sortFiles(sys.argv[1], sys.argv[2])
 
-removeBlank(sys.argv[2])
+removeBlank(sys.argv[2], sys.argv[2])  # same arg for both
 
 print("Maximums:")
 for k, v in foundMaximums.items():
