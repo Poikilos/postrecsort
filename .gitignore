@@ -1,3 +1,7 @@
+nohup.out
+tinytag-1.2.2-py3.7.egg-info
+tinytag
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
