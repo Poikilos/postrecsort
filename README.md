@@ -9,7 +9,8 @@ Sort files recovered by photorec using file analysis.
   directories ($HOME/Backup/unknown if unknown type, leave unmoved in source if ignored system file).
 - Sort and rename music files to "Artist/Album/track title".
 - Place videos and pictures that are too small in a "thumbnails"
-  directory.
+  directory. Use sort_images.py then sort_photos.py for finer
+  categorization and ad deletion (see "Use" below).
 - Tries hard to separate non-user files:
     - If title is missing from a song, it may not be a song at all,
       so it goes in "Music/misc".
@@ -29,11 +30,22 @@ pip install Pillow -t .
 ```
 
 ## Use
+- Open LICENSE in text editor for disclaimer.
 - If you just want to rename songs (not sort into directories), run `renamesongs.py <directory>`. Otherwise, continue to the next step.
 - Run PhotoRec, then:
 (If you just want to sort images, skip the first command below)
 ```
 python3 postrecsort.py <PhotoRec recovery directory> <destination directory>
+```
+- Run image and photo categorization if desired, using commands below.
+  - Deletion includes (but in future versions may not be limited to):
+    - Ads (any with size such as 252x252)
+    - Widgets from installers (any with size such as 170x330, 242x189)
+    - YouTube thumbnails (any with size such as 386x217)
+  - Categorization and deletion is based on size, so see code in
+    moremeta.py (each instance of `'disposable' : True`)
+    before continuing below!
+```
 # try to separate photographs, banners,
 python3 sort_images.py <destination directory>/Pictures
 # optional (sort into full date directories such as 2019-07-29):
@@ -45,3 +57,5 @@ python3 sort_photos.py <destination directory>/Pictures/<year>
 ### Similar programs
 - https://github.com/silug/recsort
   (only sorts music into directories)
+  - 2019-07-26: I e-mailed him (see http://www.silug.org/~steve/) to
+    inform him of postrecsort. -Poikilos

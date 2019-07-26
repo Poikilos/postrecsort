@@ -20,6 +20,18 @@ import platform
 
 derivedMetas = []
 derivedMetas.append({
+    'category' : 'ads',
+    'sizes' : [(252,252)],
+    'subcategory' : None,
+    'disposable' : True
+})
+derivedMetas.append({
+    'category' : 'square-small',
+    'sizes' : [(300,300)],
+    'subcategory' : None,
+    'disposable' : False
+})
+derivedMetas.append({
     'category' : 'thumbnails',
     'sizes' : [(386,217)],
     'subcategory' : 'YouTube',
@@ -29,12 +41,6 @@ derivedMetas.append({
     'category' : 'widgets',
     'sizes' : [(170,330),(242,189)],
     'subcategory' : 'hp-setup',
-    'disposable' : True
-})
-derivedMetas.append({
-    'category' : 'ads',
-    'sizes' : [(252,252),(300,300)],
-    'subcategory' : None,
     'disposable' : True
 })
 derivedMetas.append({
