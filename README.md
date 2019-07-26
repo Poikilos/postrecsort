@@ -36,7 +36,8 @@ pip install tinytag -t .
 2. If you just want to rename songs (not sort into directories), run
    `renamesongs.py <directory>`. Otherwise, skip this step and continue
    to the next step.
-3. Run PhotoRec (or [PhotoRec
+3. Run [photorec](https://www.cgsecurity.org/wiki/PhotoRec_Step_By_Step)
+   (or [PhotoRec
    GUI](https://www.ghacks.net/2015/04/20/how-to-use-photorec-gui-to-recover-lost-digital-photos-and-files/),
 4. Run postrecsort as follows:
 (If you ONLY want to sort images, skip this step)
