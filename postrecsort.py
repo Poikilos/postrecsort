@@ -505,6 +505,12 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                 if len(lowerExt) == 0:
                     if enableNoExtIgnore:
                         enableIgnore = True
+                if ("->." in subName) and (subname[0] == "."):
+                    # partially-downloaded file like
+                    # .name->.ext.bdX3co (where name is the filename
+                    # without extension, ext is the extension, and
+                    # bdX3co is a generated ID)
+                    enableIgnore = True
                 if lowerExt in ignoreExts:
                     enableIgnore = True
                 if enableIgnore:
