@@ -29,10 +29,19 @@ pip install Pillow -t .
 ```
 
 ## Use
-- Type `python3 postrecsort.py` to see instructions.
-
+- If you just want to rename songs (not sort into directories), run `renamesongs.py <directory>`. Otherwise, continue to the next step.
+- Run PhotoRec, then:
+(If you just want to sort images, skip the first command below)
+```
+python3 postrecsort.py <PhotoRec recovery directory> <destination directory>
+# try to separate photographs, banners,
+python3 sort_images.py <destination directory>/Pictures
+# optional (sort into full date directories such as 2019-07-29):
+python3 sort_photos.py <destination directory>/Pictures/<year>
+```
 
 ## Developer Notes
 
 ### Similar programs
 - https://github.com/silug/recsort
+  (only sorts music into directories)

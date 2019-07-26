@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# formerly internaldates.py
 from __future__ import print_function
 #
 # TODO: Rewrite modified date filesystem metadata according to EXIF date
@@ -7,10 +6,103 @@ from __future__ import print_function
 # import EXIF  # requires https://github.com/ianare/exif-py
 import os
 import shutil
-import PIL.Image
+
+# import PIL.Image
+try:
+    from PIL import Image
+except ImportError:
+    print("This program requires PIL such as from the python-pil package")
+
 import PIL.ExifTags
 from datetime import datetime
+from dateutil.parser import parse
+import platform
 
+derivedMetas = []
+derivedMetas.append({
+    'category' : 'thumbnails',
+    'sizes' : [(386,217)],
+    'subcategory' : 'YouTube',
+    'disposable' : True
+})
+derivedMetas.append({
+    'category' : 'widgets',
+    'sizes' : [(170,330),(242,189)],
+    'subcategory' : 'hp-setup',
+    'disposable' : True
+})
+derivedMetas.append({
+    'category' : 'ads',
+    'sizes' : [(252,252),(300,300)],
+    'subcategory' : None,
+    'disposable' : True
+})
+derivedMetas.append({
+    'category' : 'widgets',
+    'sizes' : [(256,256), (360,225), (360,225), (360,250)],
+    'subcategory' : 'MapTiles',
+    'disposable' : False
+})
+derivedMetas.append({
+    'category' : 'widgets',
+    'sizes' : [(180,180), (340,200), (400,334), (230,150), (222,195), (302,221)],
+    'subcategory' : None,
+    'disposable' : False
+})
+
+
+def metaBySize(size):
+    ret = None
+    for meta in derivedMetas:
+        for thisSize in meta['sizes']:
+            if size == thisSize:
+                ret = meta
+                break
+    return ret
+
+knownThumbnailSizes = [(160,120), (160,120), (200,200), (264,318), (218,145), (100,100), (158,158), (53,53), (386,217), (320,240)]
+
+minBannerRatio = 3.0
+
+# photoSizes can be opposite as well (if portrait orientation such as 0.75 ratio instead of 1.3333333...)
+photoSizes = [(2816,2112), (2422,2069), (2473,2070), (2672,2072)]
+maxNonPhotoDimension = 640
+def isPhotoSize(size, allowRatioAndMinDim=True):
+    ret = False
+    if allowRatioAndMinDim:
+        ratio = float(size[0]) / float(size[1])
+        invRatio = float(size[1]) / float(size[0])
+        if (ratio == .75) or (invRatio == .75):
+            maxDim = max(size[0], size[1])
+            if maxDim > maxNonPhotoDimension:
+                ret = True
+    if not ret:
+        for thisSize in photoSizes:
+            if (thisSize[0] == size[0]) and (thisSize[1] == size[1]):
+                ret = True
+                break
+            elif (thisSize[0] == size[1]) and (thisSize[1] == size[0]):
+                ret = True
+                break
+    return ret
+
+minNonThumbnailPixels = 150 * 199 + 1
+def isThumbnailSize(size):
+    ret = False
+    if size[0] * size[1] < minNonThumbnailPixels:
+        ret = True
+    else:
+        for thisSize in knownThumbnailSizes:
+            if (thisSize[0] == size[0]) and (thisSize[1] == size[1]):
+                ret = True
+                break
+            elif (thisSize[0] == size[1]) and (thisSize[1] == size[0]):
+                ret = True
+                break
+    return ret
+
+
+doneNames = ["thumbnails", "unusable"]
 
 # NOTE: case matters in html entities:
 bad_hex_to_html = {
@@ -88,7 +180,7 @@ def parse_date(dt_s, fmt):
     return datetime.strptime(dt_s, fmt)
 
 def extract_exif_date(path):
-    img = PIL.Image.open(path)
+    img = Image.open(path)
     exif_data = img._getexif()
     if exif_data is None:
         # print(",,NO EXIF DATA")
@@ -106,14 +198,35 @@ def extract_exif_date(path):
     # EXIF "taken" date:
     t_date = None
     # YES, exif has ':' for date separator:
-    fmt = "%Y:%m:%d %H:%M:%S"
+    fmt = "%Y-%m-%d %H:%M:%S"
+    fmt2 = "%Y-%m-%d %H:%M:%S%z"
+    thisFmt = fmt
     t_date_s = exif.get("DateTimeDigitized")
     if t_date_s is None:
         t_date_s = exif.get("OriginalDateTime")
     if t_date_s is None:
         t_date_s = exif.get("DateTime")
+    if t_date_s is None:
+        t_date_s = exif.get("DateTimeOriginal")
+    # 'DateTimeOriginal': '2007:11:07 19:57: 0'
+    # or '2006:09:08 11:47: 3'
     if t_date_s is not None:
-        t_date = datetime.strptime(t_date_s, fmt)
+        utcOffset = None
+        if (t_date_s[-3] == ":") and (t_date_s[-2] == " "):
+            t_date_s = t_date_s[:-2] + "0" + t_date_s[-1:]
+        if (t_date_s[-3] == ":") and (t_date_s[-6] == "+"):
+            # such as 2006-11-30T08:59:34+01:00
+            # change UTC offset to %z format (remove ':'):
+            t_date_s = t_date_s[0:-3] + t_date_s[-2:]
+        if t_date_s[10] == "T":
+            # change to fmt:
+            t_date_s = t_date_s[:10] + " " + t_date_s[11:]
+        if t_date_s[-5] == "+":
+            thisFmt = fmt2
+        try:
+            t_date = datetime.strptime(t_date_s, thisFmt)
+        except ValueError:
+            t_date = parse(t_date_s)
         # if t_date is None:
             # print(",,ERROR: could not read '" + fmt + "' format date"
                   # " from '" + t_date_s)
@@ -121,7 +234,8 @@ def extract_exif_date(path):
             # print(",,GOT DATE " + t_date.strftime(fmt))
     else:
         print(',' + path + ','
-              + '"ERROR: No DateTimeDigitized nor OriginalDateTime in '
+              + '"ERROR: No DateTimeDigitized, OriginalDateTime,"'
+              + ' DateTimeOriginal in '
               + str(exif) + '"')
     return t_date
 
@@ -227,7 +341,7 @@ def process_files(folder_path, op, more_results=None):
     missing_meta = None
     processed_count = None
     # checked_count = None
-
+    parentName = os.path.basename(folder_path)
     results = {}
 
     if more_results is not None:
@@ -245,7 +359,8 @@ def process_files(folder_path, op, more_results=None):
             if sub_name[:1] == ".":
                 continue
             if os.path.isdir(sub_path):
-                process_files(sub_path, op, more_results=results)
+                if sub_name not in doneNames:
+                    process_files(sub_path, op, more_results=results)
             elif os.path.isfile(sub_path):
                 t_date = None
                 type_mark = None
@@ -270,10 +385,12 @@ def process_files(folder_path, op, more_results=None):
                     # print(taken_s)
                     if op == 'move':
                         target_dir_path = os.path.join(folder_path, taken_s)
-                        if not os.path.isdir(target_dir_path):
-                            os.makedirs(target_dir_path)
-                        new_path = os.path.join(target_dir_path, sub_name)
-                        shutil.move(sub_path, new_path)
+                        if taken_s != parentName:
+                            if not os.path.isdir(target_dir_path):
+                                os.makedirs(target_dir_path)
+                            # if not already in dated directory
+                            new_path = os.path.join(target_dir_path, sub_name)
+                            shutil.move(sub_path, new_path)
                     elif op == 'show':
                         print(taken_s + "," + sub_path)
                         # print("  - IS " + type_mark)
@@ -289,6 +406,28 @@ def process_files(folder_path, op, more_results=None):
     results['missing_meta_count'] = missing_meta_count
     results['processed_count'] = processed_count
     return results
+
+def modificationDate(filePath):
+    stat = os.stat(filePath)
+    return datetime.fromtimestamp(stat.st_mtime)
+
+def creationDate(filePath):
+    """
+    Try to get the date that a file was created, falling back to when it was
+    last modified if that isn't possible.
+    See http://stackoverflow.com/a/39501288/1709587 for explanation.
+    """
+    if platform.system() == 'Windows':
+        return datetime.fromtimestamp(os.path.getctime(filePath))
+    else:
+        stat = os.stat(filePath)
+        try:
+            return datetime.fromtimestamp(stat.st_birthtime)
+        except AttributeError:
+            # We're probably on Linux. No easy way to get creation dates here,
+            # so we'll settle for when its content was last modified.
+            return datetime.fromtimestamp(stat.st_mtime)
+
 
 if __name__ == "__main__":
     # results = process_files("/home/owner/ownCloud/www/NeoArmor-older", 'show')

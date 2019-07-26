@@ -15,6 +15,8 @@ except ImportError:
 from tinytag import TinyTag
 from tinytag import TinyTagException
 
+from moremeta import isThumbnailSize
+
 def usage():
     print(sys.argv[0] + " <photorec result directory with recup_dir.*> <profile>")
 
@@ -61,16 +63,13 @@ maxComparisonSize = 2 * 1024 * 1024
 
 catDirNames = {}
 
+from moremeta import knownThumbnailSizes
+
 # region make configurable
 enableNoExtIgnore = True  # if NO extension, ignore
 ignoreMoreExts = ["zip", "gz", "html", "htm", "mmw", "php"]
-knownThumbnailSizes = [(160,120), (160,120), (200,200), (264,318), (218,145), (100,100), (158,158), (53,53)]
-# 170x330 is hp setup image
-minNonThumnailPixels = 150 * 199 + 1
-# for knownThumbnailSize in knownThumbnailSizes:
-    # pixCount = knownThumbnailSize[0] * knownThumbnailSize[1]
-    # if pixCount + 1 > minNonThumnailPixels:
-        # minNonThumnailPixels = pixCount + 1
+# for more info see derivedMetas
+
 clearRatioMax = 0.9
 # endregion make configurable
 
@@ -537,10 +536,10 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0):
                 elif category == "Pictures":
                     try:
                         im = Image.open(subPath)
-                        width, height = im.size
+                        imSize = im.size
+                        width, height = imSize
                         im.close()
-                        if ((width*height < minNonThumnailPixels)
-                                or ((width, height) in knownThumbnailSizes)):
+                        if (isThumbnailSize(imSize)):
                             catPath = os.path.join(catMajorPath, "thumbnails")
                         else:
                             catPath = catMajorPath
