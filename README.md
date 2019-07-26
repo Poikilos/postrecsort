@@ -30,14 +30,20 @@ pip install Pillow -t .
 ```
 
 ## Use
-- Open LICENSE in text editor for disclaimer.
-- If you just want to rename songs (not sort into directories), run `renamesongs.py <directory>`. Otherwise, continue to the next step.
-- Run PhotoRec, then:
-(If you just want to sort images, skip the first command below)
-```
+1. Open LICENSE in text editor for disclaimer.
+2. If you just want to rename songs (not sort into directories), run
+   `renamesongs.py <directory>`. Otherwise, skip this step and continue
+   to the next step.
+3. Run PhotoRec (or [PhotoRec
+   GUI](https://www.ghacks.net/2015/04/20/how-to-use-photorec-gui-to-recover-lost-digital-photos-and-files/),
+4. Run postrecsort as follows:
+(If you ONLY want to sort images, skip this step)
+
+```bash
 python3 postrecsort.py <PhotoRec recovery directory> <destination directory>
 ```
-- Run image and photo categorization if desired, using commands below.
+
+5. Run image and photo categorization if desired, using commands below.
   - Deletion includes (but in future versions may not be limited to):
     - Ads (any with size such as 252x252)
     - Widgets from installers (any with size such as 170x330, 242x189)
@@ -45,7 +51,8 @@ python3 postrecsort.py <PhotoRec recovery directory> <destination directory>
   - Categorization and deletion is based on size, so see code in
     moremeta.py (each instance of `'disposable' : True`)
     before continuing below!
-```
+
+```bash
 # try to separate photographs, banners,
 python3 sort_images.py <destination directory>/Pictures
 # optional (sort into full date directories such as 2019-07-29):
