@@ -23,11 +23,13 @@ Sort files recovered by photorec using file analysis.
 ## Install
 - Install the PIL and TinyTag packages for your system.
   If they are unavailable, you may be able to do:
-  ```
+
+```bash
 cd postrecsort
 pip install tinytag -t .
 pip install Pillow -t .
 ```
+
 
 ## Use
 1. Open LICENSE in text editor for disclaimer.
