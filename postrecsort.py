@@ -98,8 +98,10 @@ categories["Playlists"] = ["asx", "bpl", "feed", "itpc", "m3u", "m3u8", "opml", 
 categories["Shortcuts"] = ["lnk"]
 categories["Videos"] = ["asf", "avi", "mp2", "mp4", "mpe", "mpeg", "mpg", "mov", "swf", "wmv", "webm", "wm"]
 validMinFileSizes = {}
-validMinFileSizes["Videos"] = 40 * 1024  # 4096
-validMinFileSizes["Music"] = 1024000
+validMinFileSizes["Videos"] = 1 * 1024 * 1024
+validMinFileSizes["Music"] = 400 * 1024
+normalMinFileSizes = {}
+normalMinFileSizes["Videos"] = 15 * 1024 * 1024
 validMinFileTypeSizes = {}
 # validMinFileTypeSizes["flac"] = 3072000
 unknownTypes = []
@@ -196,6 +198,7 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
             newParentPath = folderPath
             newPath = subPath
             isBlank = False
+            subCatName = None
             isDup = False
             fileSize = os.path.getsize(subPath)
             category = None
@@ -257,9 +260,13 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
                     pass
             else:
                 validMinFileSize = validMinFileSizes.get(category)
+                normalMinFileSize = normalMinFileSizes.get(category)
                 if validMinFileSize is not None:
                     if fileSize < validMinFileSize:
                         isBlank = True
+                if normalMinFileSize is not None:
+                    if fileSize < normalMinFileSize:
+                        subCatName = "small"
                 if (prevSize is not None) and (fileSize == prevSize) \
                         and (fileSize <= maxComparisonSize) \
                         and (prevDestPath is not None):
@@ -279,10 +286,12 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
 
             if isBlank:
                 newParentPath = os.path.join(backupPath, "blank")
+            elif subCatName is not None:
+                newParentPath = os.path.join(newParentPath, subCatName)
 
             newPath = os.path.join(newParentPath, newName)
 
-            if (newPath != subPath):
+            if newPath != subPath:
                 if not os.path.isdir(newParentPath):
                     os.makedirs(newParentPath)
                 shutil.move(subPath, newPath)

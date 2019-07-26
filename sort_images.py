@@ -36,7 +36,7 @@ def pushYearUsingModTime(folderPath, recurse=True):
             progressChunkCount += 1
             newPath = None
             catPath = folderPath
-            catName = None
+            subCatName = None
             subPath = os.path.join(folderPath, subName)
             parentName = os.path.basename(folderPath)
             if progressChunkCount >= interval:
@@ -62,7 +62,7 @@ def pushYearUsingModTime(folderPath, recurse=True):
                     if isPhotoSize(im.size):
                         isPhoto = True
                     if isPhoto and (year is not None):
-                        catName = year
+                        subCatName = year
                     dMeta = metaBySize(im.size)
                     im.close()
                 except OSError:
@@ -70,25 +70,25 @@ def pushYearUsingModTime(folderPath, recurse=True):
                     # print("# no meta: '" + subPath + "'")
                     pass
                 if lowerExt == "psd":
-                    catName = "projects"
+                    subCatName = "projects"
                 enableRemove = False
                 if dMeta is not None:
                     enableRemove = dMeta['disposable']
-                    catName = dMeta['category']
+                    subCatName = dMeta['category']
                 elif ratio is not None:
                     if (ratio >= minBannerRatio) \
                             or (invRatio >= minBannerRatio):
-                        catName = 'banners'
-                if (imSize is not None) and (catName != 'banner'):
+                        subCatName = 'banners'
+                if (imSize is not None) and (subCatName != 'banner'):
                     if isThumbnailSize(imSize):
-                        catName = 'thumbnails'
+                        subCatName = 'thumbnails'
 
                 if enableRemove:
                     print("rm '" + subPath + "'")
                     os.remove(subPath)
                     continue
-                if (catName is not None) and (catName != parentName):
-                    catPath = os.path.join(folderPath, catName)
+                if (subCatName is not None) and (subCatName != parentName):
+                    catPath = os.path.join(folderPath, subCatName)
                 newPath = os.path.join(catPath, subName)
                 if subPath != newPath:
                     print("mv '" + subPath + "' '" + newPath + "'")
