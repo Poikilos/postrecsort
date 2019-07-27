@@ -13,13 +13,16 @@ The format is based on
 
 ### Changed
 - Rename photoput to sort_photos.
+- Rename getMeta to musicMega
+- Fix missing return in getAndCollectSimilarArtist
+- Move modular functions to moremeta.py (see imports in postrecsort.py)
 
 ## [git 33341d7] - 2019-07-24
 ### Added
-- Make separate getMeta function (code was formerly in loop).
+- Make separate neatMetaTags function (code was formerly in loop).
 - Add renamesongs.py for renaming songs in existing directories.
 
 ### Changed
-- Use dict from getMeta instead of using TinyTag directly.
+- Use dict from neatMetaTags instead of using TinyTag directly.
 - Fix bug on missing artist (was being changed to the word "album").
 - Prepend disc number to filename if present.

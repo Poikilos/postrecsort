@@ -9,6 +9,8 @@ from tinytag import TinyTagException
 
 from postrecsort import *
 
+from moremeta import withExt
+
 #badPathChars = ["></\\:;\t|\n\r\"?"]   # NOTE: Invalid characters on
                                        # Windows also include 1-31 & \b
 #replacementPathChars = [("\"", "in"), (":","-"), ("?",""),("\r",""), ("\n",""), ("/",","), ("\\",","), (":","-")]
@@ -31,7 +33,7 @@ def renameSongs(folderPath, relPath=""):
             # lowerExt = ext.lower()
             # print('This track is by %s.' % tag.artist)
             # print("  " * depth + subPath + ": " + str(tag))
-            newStats = getMeta(subPath)
+            newStats = neatMetaTags(subPath)
             newName = newStats.get('SuggestedFileName')
             # print("* " + artist + "/" + album + "/" + newName)
             if newName is not None:

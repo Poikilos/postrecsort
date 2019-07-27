@@ -18,6 +18,108 @@ from datetime import datetime
 from dateutil.parser import parse
 import platform
 
+import struct
+from tinytag import TinyTag
+from tinytag import TinyTagException
+
+artists = []
+albums = []
+
+badPathChars = ["></\\:;\t|\n\r\"?"]   # NOTE: Invalid characters on
+                                       # Windows also include 1-31 & \b
+replacementPathChars = [("\"", "in"), (":","-"), ("?",""),("\r",""), ("\n",""), ("/",","), ("\\",","), (":","-")]
+
+def replaceAnyChar(s, characters, newStr="_"):
+    ret = s
+    if ret is not None:
+        for c in characters:
+            ret = ret.replace(c, newStr)
+    return ret
+
+def cleanFileName(fileName):
+    newName = replaceMany(fileName, replacementPathChars)
+    newName = replaceAnyChar(newName, badPathChars, newStr="_")
+    return newName
+
+def withExt(namePart, ext=None):
+    ret = namePart
+    if (ext is not None) and (len(ext) > 0):
+         ret += "." + ext
+    return ret
+
+
+def getSimilar(needle, haystack):
+    ret = None
+    if needle is not None:
+        needleQuality = getTitleQuality(needle)
+        needleL = needle.lower()
+        theNeedle = getWithThe(needle)
+        theNeedleL = theNeedle.lower()
+        retQuality = None
+        for s in haystack:
+            quality = getTitleQuality(s)
+            theS = getWithThe(s)
+            theSL = theS.lower()
+            sL = s.lower()
+            # if (theSL == needleL) or (theSL == theNeedleL) \
+                    # or (sL == needleL) or (sL == theNeedleL):
+            if (sL == needleL) or (sL == theNeedleL):
+                if (retQuality is None) or (quality > retQuality):
+                    retQuality = quality
+                    ret = s
+    return ret
+
+
+def getAndCollectSimilarArtist(name):
+    ret = getSimilar(name, artists)
+    if name is not None:
+        if name not in artists:
+            artists.append(name)
+    if ret is None:
+        ret = name
+    return ret
+
+def getAndCollectSimilarAlbum(name):
+    ret = getSimilar(name, albums)
+    if name is not None:
+        if name not in albums:
+            albums.append(name)
+    if ret is None:
+        ret = name
+    return ret
+
+
+def startsWithThe(s):
+    if s is None:
+        return False
+    return (len(s) >= 4) and (s.lower()[0:4] == "the ")
+
+def getWithThe(s):
+    ret = s
+    if ret is not None:
+        if not startsWithThe(s):
+            ret = "The " + s
+    return ret
+
+def getWithoutThe(s):
+    ret = s
+    if ret is not None:
+        if startsWithThe(s):
+            ret = s[4:]
+    return ret
+
+def getTitleQuality(title):
+    ret = -1
+    if title is not None:
+        ret = 0
+        if startsWithThe(title):
+            ret += 4
+        for c in title:
+            if c == c.upper():
+                ret += 1
+    return ret
+
+
 derivedMetas = []
 derivedMetas.append({
     'category' : 'ads',
@@ -433,6 +535,148 @@ def creationDate(filePath):
             # We're probably on Linux. No easy way to get creation dates here,
             # so we'll settle for when its content was last modified.
             return datetime.fromtimestamp(stat.st_mtime)
+
+
+def decodeAny(unicode_or_str):
+    # see https://stackoverflow.com/a/19877309/4541104
+    text = None
+    if unicode_or_str is not None:
+        if isinstance(unicode_or_str, str):
+            text = unicode_or_str
+            decoded = False
+        elif isinstance(unicode_or_str, int):
+            text = str(unicode_or_str)
+            decoded = False
+        elif isinstance(unicode_or_str, float):
+            text = str(unicode_or_str)
+            decoded = False
+        else:
+            text = unicode_or_str.decode('ascii')
+            decoded = True
+        # text = text.rstrip('\x00')
+        text = text.replace('\x00','')  # overkill (rstrip is ok)
+    return text
+
+
+def replaceMany(s, tuples):
+    ret = s
+    if ret is not None:
+        for t in tuples:
+            ret = ret.replace(t[0], t[1])
+    return ret
+
+
+# Usage:
+# tag = TinyTag.get(subPath)
+# filenName = fileNameFromStats(tag.__dict__)
+def neatMetaTags(path):
+    ret = {}
+    album = None
+    artist = None
+    title = None
+    track = None
+    newName = None
+
+    if not os.path.isfile(path):
+        raise RuntimeError("not a file: " + str(path))
+    try:
+        newName = os.path.basename(path)
+        ext = os.path.splitext(path)[1]
+        if len(ext) > 1:
+            ext = ext[1:]  # remove dot
+        lowerExt = ext.lower()
+        tag = TinyTag.get(path)
+        artist = tag.__dict__.get('albumartist')
+        album = tag.__dict__.get('album')
+        title = tag.__dict__.get('title')
+        track = tag.__dict__.get('track')
+        disc = tag.__dict__.get('disc')
+        if artist is None:
+            songArtist = tag.__dict__.get('artist')
+            if songArtist is not None:
+                artist = decodeAny(songArtist)
+            else:
+                artist = "unknown"
+                # print("#NO albumartist nor artist in " + str(tag.__dict__))
+            # category = None
+        else:
+            artist = decodeAny(artist)
+            # artist = unicode(artist, "utf-8")
+        # print("artist: " + artist)
+        album = decodeAny(album)
+        title = decodeAny(title)
+        track = decodeAny(track)
+        disc = decodeAny(disc)
+
+        artist = replaceMany(artist, replacementPathChars)
+        album = replaceMany(album, replacementPathChars)
+        title = replaceMany(title, replacementPathChars)
+
+        artist = replaceAnyChar(artist, badPathChars, newStr="_")
+        album = replaceAnyChar(album, badPathChars, newStr="_")
+        title = replaceAnyChar(title, badPathChars, newStr="_")
+
+        if artist is not None:
+            artist = artist.strip()
+        if album is not None:
+            album = album.strip()
+        if title is not None:
+            title = title.strip()
+        if track is not None:
+            track = track.strip()
+            if len(track) == 1:
+                track = "0" + track
+
+        # print("artist is first " + artist)
+        album = getAndCollectSimilarAlbum(album)
+        artist = getAndCollectSimilarArtist(artist)
+
+        if (artist is None) or (len(artist) == 0):
+            artist = "unknown"
+            # print("artist set to unknown.")
+        if (album is None) or (len(album) == 0):
+            album = "unknown"
+            # category = None
+        else:
+            album = decodeAny(album)
+        if len(album) == 0:
+            album = "unknown"
+        if title is not None:
+            if track is not None:
+                if title[:3] == track + ".":
+                    title = title[3:].strip()
+                if title[:2] == track:
+                    title = title[2:].strip()
+                newName = withExt(track + " " + title, ext)
+                if disc is not None:
+                    newName = disc + "." + newName
+                    # print(newName)
+            else:
+                newName = withExt(title, ext)
+        elif track is not None:
+            newName = track + " " + subName
+    except TinyTagException:
+        # no tag info
+        pass
+    except struct.error:
+        # such as "unpack requires a buffer of 34 bytes"
+        # during TinyTag.get(path)
+        # print("#  " * depth + "No tags: " + lowerExt)
+        pass
+    if artist is not None:
+        ret['Artist'] = artist
+        # print("artist is " + ret['Artist'])
+    # else:
+        # print("artist is None")
+    if album is not None:
+        ret['Album'] = album
+    if track is not None:
+        ret['Track'] = track
+    if title is not None:
+        ret['Title'] = title
+    if newName is not None:
+        ret['SuggestedFileName'] = newName
+    return ret
 
 
 if __name__ == "__main__":

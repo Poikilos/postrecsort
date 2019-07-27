@@ -5,6 +5,8 @@ Sort files recovered by photorec using file analysis.
 ## Primary Features
 - Move images that are mostly transparent (to dest/Backup/blank).
 - Remove duplicate images by exact visual match.
+  - Remove smaller files with same name, including smaller automatically
+    renamed music file with same Artist, Album, Track#, and Title.
 - Sort by extension into Documents, Pictures, Videos, and other
   directories ($HOME/Backup/unknown if unknown type, leave unmoved in source if ignored system file).
 - Sort and rename music files to "Artist/Album/track title".
