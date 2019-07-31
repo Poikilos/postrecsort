@@ -17,6 +17,7 @@ from moremeta import neatMetaTags
 from moremeta import replaceMany
 from moremeta import cleanFileName
 from moremeta import withExt
+from moremeta import getCategoryByExt
 
 def usage():
     print(sys.argv[0] + " <photorec result directory with recup_dir.*> <profile>")
@@ -58,20 +59,8 @@ ignoreExts = [ "ani", "api", "asp", "ax", "bat", "cnv", "cp_", "cpl",
 for thisExt in ignoreMoreExts:
     ignoreExts.append(thisExt)
 ignore = ["user", "nohup.out"]
-categories = {}
-categories["Backup"] = ["7z", "accdb", "dbx", "idx", "mbox", "mdb", "pst", "sqlite", "tar", "wab", "zip"]
-categories["Documents"] = ["ai", "csv", "doc", "docx", "mpp", "pdf", "ppt", "pptx", "ps", "rtf", "wpd", "wps", "xls", "xlsx", "xlr"]
-categories["PlainText"] = ["txt"]
-categories["Downloads"] = ["bin", "cue", "iso"]
-categories["Torrents"] = ["torrent"]
-categories["eBooks"] = ["prc", "lit"]
-categories["Links"] = ["url", "website"]
-categories["Meshes"] = ["x3d"]
-categories["Music"] = ["ape", "flac", "m4a", "mid", "mp3", "ogg", "wav", "wma"]
-categories["Pictures"] = ["bmp", "gif", "ico", "jpe", "jpeg", "jpg", "png", "psd", "svg", "wmf"]
-categories["Playlists"] = ["asx", "bpl", "feed", "itpc", "m3u", "m3u8", "opml", "pcast", "pls", "podcast", "rm", "rmj","rmm", "rmx", "rp", "smi", "smil", "upf", "vlc", "wpl", "xspf", "zpl"]
-categories["Shortcuts"] = ["lnk"]
-categories["Videos"] = ["asf", "avi", "mp2", "mp4", "mpe", "mpeg", "mpg", "mov", "swf", "wmv", "webm", "wm"]
+
+
 validMinFileSizes = {}
 validMinFileSizes["Videos"] = 1 * 1024 * 1024
 validMinFileSizes["Music"] = 400 * 1024
@@ -142,6 +131,7 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
     prevIm = None
     prevSize = None
     prevDestPath = None
+    parentName = os.path.basename(folderPath)
 
     for subName in sortedBySize(folderPath, os.listdir(folderPath)):
         subPath = os.path.join(folderPath, subName)
@@ -161,11 +151,7 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
             subCatName = None
             isDup = False
             fileSize = os.path.getsize(subPath)
-            category = None
-            for k, v in categories.items():
-                # print("checking if " + str(v) + "in" + str(catDirNames))
-                if lowerExt in v:
-                    category = k
+            category = getCategoryByExt(lowerExt)
 
             if category == "Pictures":
                 # print("# checking if blank: " + subPath)
@@ -240,13 +226,16 @@ def removeExtra(folderPath, profilePath, relPath="", depth=0):
             newName = cleanFileName(newName)
 
             if isDup:
+                print("#dup:")
+                print("rm '" + subPath + "'")
                 os.remove(subPath)  # do not set previous if removing
                 continue
 
             if isBlank:
                 newParentPath = os.path.join(backupPath, "blank")
             elif subCatName is not None:
-                newParentPath = os.path.join(newParentPath, subCatName)
+                if subCatName != parentName:
+                    newParentPath = os.path.join(newParentPath, subCatName)
 
             newPath = os.path.join(newParentPath, newName)
 
@@ -285,22 +274,12 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0, enablePrint=Fa
                 if len(lowerExt) == 0:
                     if enableNoExtIgnore:
                         enableIgnore = True
-                if ("->." in subName) and (subName[0] == "."):
-                    # partially-downloaded file like
-                    # .name->.ext.bdX3co (where name is the filename
-                    # without extension, ext is the extension, and
-                    # bdX3co is a generated ID)
-                    enableIgnore = True
                 if lowerExt in ignoreExts:
                     enableIgnore = True
                 if enableIgnore:
                     continue
                 fileSize = os.path.getsize(subPath)
-                category = None
-                for k, v in categories.items():
-                    # print("checking if " + str(v) + "in" + str(catDirNames))
-                    if lowerExt in v:
-                        category = k
+                category = getCategoryByExt(lowerExt)
                 if category is None:
                     category = "Backup"
                     if lowerExt not in unknownTypes:
@@ -365,6 +344,7 @@ def sortFiles(preRecoveredPath, profilePath, relPath="", depth=0, enablePrint=Fa
                     if fileSize <= os.path.getsize(newPath):
                         continue
                     elif fileSize > os.path.getsize(newPath):
+                        print("# removing smaller '" + newPath + "' and keeping '" + subPath + "'")
                         os.remove(newPath)
 
                 # while os.path.isfile(newPath):

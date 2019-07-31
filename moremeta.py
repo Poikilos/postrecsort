@@ -13,6 +13,7 @@ try:
 except ImportError:
     print("This program requires PIL such as from the python-pil package")
 
+
 import PIL.ExifTags
 from datetime import datetime
 from dateutil.parser import parse
@@ -22,12 +23,32 @@ import struct
 from tinytag import TinyTag
 from tinytag import TinyTagException
 
-artists = []
-albums = []
+dataDirName = "data"
+dataDirPath = dataDirName
+similarsDirName = "similar"
+similarsDirPath = os.path.join(dataDirPath, similarsDirName)
+similarLists = {}  # formerly artists and albums
+
 
 badPathChars = ["></\\:;\t|\n\r\"?"]   # NOTE: Invalid characters on
                                        # Windows also include 1-31 & \b
 replacementPathChars = [("\"", "in"), (":","-"), ("?",""),("\r",""), ("\n",""), ("/",","), ("\\",","), (":","-")]
+
+categories = {}
+categories["Backup"] = ["7z", "accdb", "dbx", "idx", "mbox", "mdb", "pst", "sqlite", "tar", "wab", "zip"]
+categories["Documents"] = ["ai", "csv", "doc", "docx", "mpp", "pdf", "ppt", "pptx", "ps", "rtf", "wpd", "wps", "xls", "xlsx", "xlr"]
+categories["PlainText"] = ["txt"]
+categories["Downloads"] = ["bin", "cue", "iso"]
+categories["Torrents"] = ["torrent"]
+categories["eBooks"] = ["prc", "lit"]
+categories["Links"] = ["url", "website"]
+categories["Meshes"] = ["x3d"]
+categories["Music"] = ["ape", "flac", "m4a", "mid", "mp3", "ogg", "wav", "wma"]
+categories["Pictures"] = ["bmp", "gif", "ico", "jpe", "jpeg", "jpg", "png", "psd", "svg", "wmf"]
+categories["Playlists"] = ["asx", "bpl", "feed", "itpc", "m3u", "m3u8", "opml", "pcast", "pls", "podcast", "rm", "rmj","rmm", "rmx", "rp", "smi", "smil", "upf", "vlc", "wpl", "xspf", "zpl"]
+categories["Shortcuts"] = ["lnk"]
+categories["Videos"] = ["asf", "avi", "mp2", "mp4", "mpe", "mpeg", "mpg", "mov", "swf", "wmv", "webm", "wm"]
+_eMusicFlag = ", @ www.emusic.com.  Download, play, burn MP3s @ www.emusic.com."
 
 def replaceAnyChar(s, characters, newStr="_"):
     ret = s
@@ -37,7 +58,20 @@ def replaceAnyChar(s, characters, newStr="_"):
     return ret
 
 def cleanFileName(fileName):
-    newName = replaceMany(fileName, replacementPathChars)
+    newName = fileName
+    if newName is not None:
+        if newName[-2:] == "->":
+            # such as song title from CDDB for The Grateful Dead's
+            # "Road Trips VOL. 3 NO. 4 Disc ?" where '?' is 1, 2, and 3.
+            newName = newName[:-2]
+        if newName[:2] == "- ":
+            # such as song title from CDDB that says:
+            # artist: - 19th Nervous Breakdown
+            # album: Unsurpassed Masters Vol. 7
+            # song (such as): Alternate Vocal - Upgrade)
+            newName = newName[:-2]
+        newName = newName.replace("->.", ".")
+    newName = replaceMany(newName, replacementPathChars)
     newName = replaceAnyChar(newName, badPathChars, newStr="_")
     return newName
 
@@ -69,21 +103,39 @@ def getSimilar(needle, haystack):
                     ret = s
     return ret
 
-
-def getAndCollectSimilarArtist(name):
-    ret = getSimilar(name, artists)
+# formerly getAndCollectSimilarAlbum and getAndCollectSimilarArtist
+def getAndCollectSimilar(name, what):
+    global similarLists
+    whatName = what + ".txt"
+    whatPath = os.path.join(similarsDirPath, whatName)
+    if similarLists.get(what) is None:
+        similarLists[what] = []
+        if os.path.isfile(whatPath):
+            print("* loading " + what + "...")
+            ins = open(whatPath, 'r')
+            rawLine = True
+            while rawLine:
+                rawLine = ins.readline()
+                if rawLine:
+                    line = rawLine.strip()
+                    if len(line) > 0:
+                        similarLists[what].append(line)
+            ins.close()
+    ret = getSimilar(name, similarLists[what])
     if name is not None:
-        if name not in artists:
-            artists.append(name)
-    if ret is None:
-        ret = name
-    return ret
-
-def getAndCollectSimilarAlbum(name):
-    ret = getSimilar(name, albums)
-    if name is not None:
-        if name not in albums:
-            albums.append(name)
+        if name not in similarLists[what]:
+            similarLists[what].append(name)
+            outs = None
+            if not os.path.isdir(similarsDirPath):
+                if not os.path.isdir(dataDirPath):
+                    os.mkdir(dataDirPath)
+                os.mkdir(similarsDirPath)
+            if os.path.isfile(whatPath):
+                outs = open(whatPath, 'a')
+            else:
+                outs = open(whatPath, 'w')
+            outs.write(name + "\n")
+            outs.close()
     if ret is None:
         ret = name
     return ret
@@ -515,6 +567,44 @@ def process_files(folder_path, op, more_results=None):
     results['processed_count'] = processed_count
     return results
 
+# Non-recursively sort into "ext" directories where ext is extension.
+def sortByExt(folderPath):
+    if os.path.isdir(folderPath):
+        subs = os.listdir(folderPath)
+        subIndex = -1
+        interval = len(subs) / 100
+        if interval < 0:
+            interval = 1
+        progressChunkCount = -1
+        for subName in subs:
+            subIndex += 1
+            progressChunkCount += 1
+            newPath = None
+            catPath = folderPath
+            subCatName = None
+            subPath = os.path.join(folderPath, subName)
+            parentName = os.path.basename(folderPath)
+            if progressChunkCount >= interval:
+                print("# " + parentName + " " + str(int(round(float(subIndex)/float(len(subs))*100.0))) + "%")
+                progressChunkCount = -1
+            if os.path.isfile(subPath):
+                ext = os.path.splitext(subPath)[1]
+                if len(ext) > 1:
+                    ext = ext[1:]  # remove dot
+                else:
+                    continue
+                lowerExt = ext.lower()
+                category = getCategoryByExt(lowerExt)
+                if category is not None:
+                    catPath = os.path.join(folderPath, category)
+                    if not os.path.isdir(catPath):
+                        os.makedirs(catPath)
+                    newPath = os.path.join(catPath, subName)
+                    if newPath != subPath:
+                        # print("mv '" + subPath + "' '" + newPath + "'")
+                        shutil.move(subPath, newPath)
+
+
 def modificationDate(filePath):
     stat = os.stat(filePath)
     return datetime.fromtimestamp(stat.st_mtime)
@@ -566,16 +656,42 @@ def replaceMany(s, tuples):
     return ret
 
 
+def getCategoryByExt(lowercaseExt):
+    for k, v in categories.items():
+        # print("checking if " + str(v) + "in" + str(catDirNames))
+        if lowercaseExt in v:
+            category = k
+    return category
+
+
+
+def getCategoryByExtUsingPath(path):
+    ext = os.path.splitext(path)[1]
+    if len(ext) > 1:
+        ext = ext[1:]  # remove dot
+    lowerExt = ext.lower()
+    return getCategoryByExt(lowerExt)
+
+def hasAnyChar(haystack, needles):
+    ret = False
+    if haystack is not None:
+        for needle in needles:
+            if needle in haystack:
+                ret = True
+                break
+    return ret
+
 # Usage:
 # tag = TinyTag.get(subPath)
 # filenName = fileNameFromStats(tag.__dict__)
-def neatMetaTags(path):
+def neatMetaTags(path, makeAllValidPathChars=True):
     ret = {}
     album = None
     artist = None
     title = None
     track = None
     newName = None
+    comment = None
 
     if not os.path.isfile(path):
         raise RuntimeError("not a file: " + str(path))
@@ -591,6 +707,7 @@ def neatMetaTags(path):
         title = tag.__dict__.get('title')
         track = tag.__dict__.get('track')
         disc = tag.__dict__.get('disc')
+        comment = tag.__dict__.get('comment')
         if artist is None:
             songArtist = tag.__dict__.get('artist')
             if songArtist is not None:
@@ -607,14 +724,19 @@ def neatMetaTags(path):
         title = decodeAny(title)
         track = decodeAny(track)
         disc = decodeAny(disc)
+        comment = decodeAny(comment)
 
-        artist = replaceMany(artist, replacementPathChars)
-        album = replaceMany(album, replacementPathChars)
-        title = replaceMany(title, replacementPathChars)
 
-        artist = replaceAnyChar(artist, badPathChars, newStr="_")
-        album = replaceAnyChar(album, badPathChars, newStr="_")
-        title = replaceAnyChar(title, badPathChars, newStr="_")
+        if _eMusicFlag in artist:
+            artist = artist.replace(_eMusicFlag, "")
+            ret['eMusicFlag'] = _eMusicFlag
+            # Do NOT add to comment, since would aready have song URL.
+
+
+        if makeAllValidPathChars:
+            artist = cleanFileName(artist)
+            album = cleanFileName(album)
+            title = cleanFileName(title)
 
         if artist is not None:
             artist = artist.strip()
@@ -628,8 +750,8 @@ def neatMetaTags(path):
                 track = "0" + track
 
         # print("artist is first " + artist)
-        album = getAndCollectSimilarAlbum(album)
-        artist = getAndCollectSimilarArtist(artist)
+        album = getAndCollectSimilar(album, "album")
+        artist = getAndCollectSimilar(artist, "artist")
 
         if (artist is None) or (len(artist) == 0):
             artist = "unknown"
@@ -643,8 +765,15 @@ def neatMetaTags(path):
             album = "unknown"
         if title is not None:
             if track is not None:
+                trackWithoutZero = track
+                if trackWithoutZero[0] == "0":
+                    trackWithoutZero = trackWithoutZero[1:]
                 if title[:3] == track + ".":
                     title = title[3:].strip()
+                if title[:2] == trackWithoutZero + ".":
+                    title = title[2:].strip()
+                if title[:2] == trackWithoutZero + " ":
+                    title = title[2:].strip()
                 if title[:2] == track:
                     title = title[2:].strip()
                 newName = withExt(track + " " + title, ext)
@@ -675,30 +804,43 @@ def neatMetaTags(path):
     if title is not None:
         ret['Title'] = title
     if newName is not None:
+        newName = cleanFileName(newName)
         ret['SuggestedFileName'] = newName
+    for k, v in ret.items():
+        if hasAnyChar(v, badPathChars):
+            raise RuntimeError("failed to clean up" + str(ret))
+    if hasAnyChar(newName, badPathChars):
+        raise RuntimeError("failed to clean up newname " + str(newName))
     return ret
 
 
 if __name__ == "__main__":
-    # results = process_files("/home/owner/ownCloud/www/NeoArmor-older", 'show')
-    results = process_files("/home/owner/ownCloud/www/expertmultimedia/besidethevoid", 'show')
-    print("")
-    print("unknown_type_count: " + str(results.get('unknown_type_count')))
-    for path in results.get('unknown_type'):
-        print("  - " + path)
-    print("missing_meta_count: " + str(results.get('missing_meta_count')))
-    missing_meta_non_html_only_count = 0
-    print("missing_meta_non_html_only:")
-    for path in results.get('missing_meta'):
-        if not is_html(path):
-            print("  - " + path)
-            missing_meta_non_html_only_count += 1
-    print("missing_meta_non_html_only_count:"
-          + str(missing_meta_non_html_only_count))
-    print("processed_count: " + str(results.get('processed_count')))
+    print("Instead of running this file directly, import it.")
+    exit(1)
+    # results = process_files("/home/owner/ownCloud/www/NeoArmor-older",
+    #                         'show')
+    # results = process_files("/home/owner/ownCloud/www"
+    #                         "/expertmultimedia/besidethevoid", 'show')
+    # print("")
+    # print("unknown_type_count: "
+    #       + str(results.get('unknown_type_count')))
+    # for path in results.get('unknown_type'):
+        # print("  - " + path)
+    # print("missing_meta_count: "
+    #       + str(results.get('missing_meta_count')))
+    # missing_meta_non_html_only_count = 0
+    # print("missing_meta_non_html_only:")
+    # for path in results.get('missing_meta'):
+        # if not is_html(path):
+            # print("  - " + path)
+            # missing_meta_non_html_only_count += 1
+    # print("missing_meta_non_html_only_count:"
+          # + str(missing_meta_non_html_only_count))
+    # print("processed_count: " + str(results.get('processed_count')))
 
     # not tried yet:
         # with open('image.jpg', 'rb') as fh:
-            # tags = EXIF.process_file(fh, stop_tag="EXIF DateTimeOriginal")
+            # tags = EXIF.process_file(fh,
+            #                          stop_tag="EXIF DateTimeOriginal")
             # dateTaken = tags["EXIF DateTimeOriginal"]
             # return dateTaken

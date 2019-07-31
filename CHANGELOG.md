@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+
+## [git] - 2019-07-31
+### Added
+- Add sortByExt and sort_by_ext.py and related sample data.
+- Split eMusicFlag in artist tag into a separate key.
+- Replace hard-coded category logic with getCategoryByExtUsingPath and
+  getCategoryByExt.
+
+### Changed
+- Clean tags better (Correctly find useless "->" at end of tag instead
+  of later looking for "->." in new filename).
+- Keep comment tag.
+- Replace `getAndCollect*` with `getAndCollectSimilar` (also combine
+  lists into dict of lists `similarLists`)
+
+
 ## [git] - 2019-07-26
 ### Added
 - sort_photos.py (formerly photoput.py local project)
@@ -16,6 +32,7 @@ The format is based on
 - Rename getMeta to musicMega
 - Fix missing return in getAndCollectSimilarArtist
 - Move modular functions to moremeta.py (see imports in postrecsort.py)
+
 
 ## [git 33341d7] - 2019-07-24
 ### Added
