@@ -339,7 +339,7 @@ html_date_patterns.append({
 def parse_date(dt_s, fmt):
     return datetime.strptime(dt_s, fmt)
 
-def extract_exif_date(path):
+def extract_exif_date(path, verbose=False):
     img = Image.open(path)
     exif_data = img._getexif()
     if exif_data is None:
@@ -357,21 +357,33 @@ def extract_exif_date(path):
     # print(str(exif))
     # EXIF "taken" date:
     t_date = None
-    # YES, exif has ':' for date separator:
-    fmt = "%Y-%m-%d %H:%M:%S"
-    fmt2 = "%Y-%m-%d %H:%M:%S%z"
+
+    # ':' IS the EXIF Ymd delimiter:
+    fmt = "%H:%M:%S"
+    fmt2 = "%H:%M:%S%z"
+    fmtDate1 = "%Y:%m:%d"
+    fmtDate2 = "%Y-%m-%d"
     thisFmt = fmt
     t_date_s = exif.get("DateTimeDigitized")
     if t_date_s is None:
         t_date_s = exif.get("OriginalDateTime")
-    if t_date_s is None:
-        t_date_s = exif.get("DateTime")
-    if t_date_s is None:
-        t_date_s = exif.get("DateTimeOriginal")
+        if t_date_s is None:
+            t_date_s = exif.get("DateTime")
+            if t_date_s is None:
+                t_date_s = exif.get("DateTimeOriginal")
+            elif verbose:
+                print("DateTime: {}".format(t_date_s))
+        elif verbose:
+            print("OriginalDateTime: {}".format(t_date_s))
+    elif verbose:
+        print("DateTimeDigitized: {}".format(t_date_s))
     # 'DateTimeOriginal': '2007:11:07 19:57: 0'
     # or '2006:09:08 11:47: 3'
+    # or '2016:06:25 09:46:47'
     if t_date_s is not None:
         utcOffset = None
+        if verbose:
+            print("  reformatting {}...".format(t_date_s))
         if (t_date_s[-3] == ":") and (t_date_s[-2] == " "):
             t_date_s = t_date_s[:-2] + "0" + t_date_s[-1:]
         if (t_date_s[-3] == ":") and (t_date_s[-6] == "+"):
@@ -383,8 +395,12 @@ def extract_exif_date(path):
             t_date_s = t_date_s[:10] + " " + t_date_s[11:]
         if t_date_s[-5] == "+":
             thisFmt = fmt2
+        fullFmt = fmtDate1 + " " + thisFmt
+
+        if verbose:
+            print("  parsing {} as {}...".format(t_date_s, fullFmt))
         try:
-            t_date = datetime.strptime(t_date_s, thisFmt)
+            t_date = datetime.strptime(t_date_s, fullFmt)
         except ValueError:
             t_date = parse(t_date_s)
         # if t_date is None:
@@ -397,6 +413,8 @@ def extract_exif_date(path):
               + '"ERROR: No DateTimeDigitized, OriginalDateTime,"'
               + ' DateTimeOriginal in '
               + str(exif) + '"')
+    if verbose:
+        print("  result: {}".format(t_date))
     return t_date
 
 enc_pattern = {
@@ -494,7 +512,7 @@ def extract_html_date(path):
         dt = parse_date(result, pattern['format'])
     return dt
 
-def process_files(folder_path, op, more_results=None):
+def process_files(folder_path, op, more_results=None, verbose=False):
     unknown_type = None
     unknown_type_count = None
     missing_meta_count = None
@@ -526,7 +544,8 @@ def process_files(folder_path, op, more_results=None):
                 type_mark = None
                 if is_jpeg(sub_path):
 
-                    t_date = extract_exif_date(sub_path)
+                    t_date = extract_exif_date(sub_path,
+                                               verbose=verbose)
                     # if processed_count == 0:
                         # outs = open("example.exif.dict.txt", 'w')
                         # outs.write(str(exif))
