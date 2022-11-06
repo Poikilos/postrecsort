@@ -7,13 +7,15 @@ import shutil
 from tinytag import TinyTag
 from tinytag import TinyTagException
 
-from postrecsort import *
+from moremeta import (
+    withExt,
+    neatMetaTags,
+)
 
-from moremeta import withExt
-
-#badPathChars = ["></\\:;\t|\n\r\"?"]   # NOTE: Invalid characters on
-                                       # Windows also include 1-31 & \b
-#replacementPathChars = [("\"", "in"), (":","-"), ("?",""),("\r",""), ("\n",""), ("/",","), ("\\",","), (":","-")]
+# badPathChars = ["></\\:;\t|\n\r\"?"]
+# ^ NOTE: Invalid characters on Windows also: ASCII indices 1-31 and \b
+# replacementPathChars = [("\"", "in"), (":","-"), ("?",""),("\r",""),
+#                         ("\n",""), ("/",","), ("\\",","), (":","-")]
 
 def renameSongs(folderPath, relPath=""):
     for subName in os.listdir(folderPath):

@@ -11,13 +11,15 @@ try:
 except ImportError:
     print("This program requires PIL such as from the python-pil package")
 
-
-from moremeta import isThumbnailSize
-from moremeta import neatMetaTags
-from moremeta import replaceMany
-from moremeta import cleanFileName
-from moremeta import withExt
-from moremeta import getCategoryByExt
+from moremeta import (
+    isThumbnailSize,
+    neatMetaTags,
+    replaceMany,
+    cleanFileName,
+    withExt,
+    getCategoryByExt,
+    knownThumbnailSizes,
+)
 
 def usage():
     print(sys.argv[0] + " <photorec result directory with recup_dir.*> <profile>")
@@ -38,8 +40,6 @@ largeSize = 1024000
 maxComparisonSize = 2 * 1024 * 1024
 
 catDirNames = {}
-
-from moremeta import knownThumbnailSizes
 
 # region make configurable
 enableNoExtIgnore = True  # if NO extension, ignore
