@@ -4,6 +4,10 @@
 # Author: Jake Gustafson (poikilos)
 import sys
 
+from find_moreplatform import moreplatform
+
+from moreplatform import moremeta
+
 from moremeta import (
     process_files,
 )

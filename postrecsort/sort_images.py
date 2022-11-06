@@ -13,11 +13,17 @@ except ImportError:
 
 import PIL.ExifTags
 
-from moremeta import modificationDate
-from moremeta import metaBySize
-from moremeta import minBannerRatio
-from moremeta import isPhotoSize
-from moremeta import isThumbnailSize
+from find_moreplatform import moreplatform
+
+from moreplatform import moremeta
+
+from moremeta import (
+    modificationDate,
+    metaBySize,
+    minBannerRatio,
+    isPhotoSize,
+    isThumbnailSize,
+)
 
 if len(sys.argv) < 2:
     print("You must specify a directory.")

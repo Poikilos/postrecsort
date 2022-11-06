@@ -11,6 +11,11 @@ try:
 except ImportError:
     print("This program requires PIL such as from the python-pil package")
 
+
+from find_moreplatform import moreplatform
+
+from moreplatform import moremeta
+
 from moremeta import (
     isThumbnailSize,
     neatMetaTags,

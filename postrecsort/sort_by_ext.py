@@ -3,12 +3,18 @@ import sys
 import os
 import shutil
 
-from moremeta import modificationDate
-from moremeta import metaBySize
-from moremeta import minBannerRatio
-from moremeta import isPhotoSize
-from moremeta import isThumbnailSize
-from moremeta import sortByExt
+from find_moreplatform import moreplatform
+
+from moreplatform import moremeta
+
+from moremeta import (
+    modificationDate,
+    metaBySize,
+    minBannerRatio,
+    isPhotoSize,
+    isThumbnailSize,
+    sortByExt,
+)
 
 if len(sys.argv) < 2:
     print("You must specify a directory.")

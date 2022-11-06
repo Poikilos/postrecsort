@@ -7,6 +7,10 @@ import shutil
 from tinytag import TinyTag
 from tinytag import TinyTagException
 
+from find_moreplatform import moreplatform
+
+from moreplatform import moremeta
+
 from moremeta import (
     withExt,
     neatMetaTags,
