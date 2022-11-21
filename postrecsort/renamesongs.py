@@ -7,11 +7,9 @@ import shutil
 from tinytag import TinyTag
 from tinytag import TinyTagException
 
-from find_moreplatform import moreplatform
+from .find_hierosoft import hierosoft
 
-from moreplatform import moremeta
-
-from moremeta import (
+from hierosoft.moremeta import (
     withExt,
     neatMetaTags,
 )

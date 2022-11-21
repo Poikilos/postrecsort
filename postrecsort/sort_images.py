@@ -13,11 +13,9 @@ except ImportError:
 
 import PIL.ExifTags
 
-from find_moreplatform import moreplatform
+from .find_hierosoft import hierosoft
 
-from moreplatform import moremeta
-
-from moremeta import (
+from hierosoft.moremeta import (
     modificationDate,
     metaBySize,
     minBannerRatio,

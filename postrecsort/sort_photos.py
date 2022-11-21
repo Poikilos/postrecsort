@@ -4,11 +4,9 @@
 # Author: Jake Gustafson (poikilos)
 import sys
 
-from find_moreplatform import moreplatform
+from .find_hierosoft import hierosoft
 
-from moreplatform import moremeta
-
-from moremeta import (
+from hierosoft.moremeta import (
     process_files,
 )
 
